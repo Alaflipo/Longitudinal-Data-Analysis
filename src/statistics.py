@@ -24,7 +24,7 @@ class Stats:
         self.groups = []
         self.groups_data = {}
 
-        self.overall_average = 0
+        self.overall_mean = 0
         self.total_sum_of_squares = 0
         self.within_group_sum_of_squares = 0
         self.between_group_sum_of_squares = 0
@@ -71,19 +71,23 @@ class Stats:
         self.__set_group_data(current_group, previous, group_index)
 
         self.m = len(self.group_sizes)
-        self.overall_average = self.set_overall_average()
+        self.overall_mean = self.set_overall_mean()
         self.total_sum_of_squares = self.set_total_sum_of_squares()
         self.within_group_sum_of_squares = self.set_within_group_sum_of_squares()
         self.between_group_sum_of_squares = self.set_between_group_sum_of_squares()
 
-    def set_overall_average(self): 
-        average = 0
+        # set degrees of freedom 
+        self.df_between = self.m - 1
+        self.df_within = self.n - self.m
+
+    def set_overall_mean(self): 
+        mean = 0
         for key in self.groups_data: 
             # if all values are nan, it is not counted for the average
             if not math.isnan(self.groups_data[key]['group_mean']): 
-                average += (self.groups_data[key]['size'] / self.n) * self.groups_data[key]['group_mean']
+                mean += (self.groups_data[key]['size'] / self.n) * self.groups_data[key]['group_mean']
 
-        return average
+        return mean
 
     # is normally distributed with mean \mu and variance \sigma^2/m
     def mean(self, values): 
@@ -107,7 +111,7 @@ class Stats:
         return sum
 
     def set_total_sum_of_squares(self): 
-        return self.sos(self.data[self.target_name].to_numpy(), self.overall_average)
+        return self.sos(self.data[self.target_name].to_numpy(), self.overall_mean)
 
     def set_within_group_sum_of_squares(self): 
         within_sos = 0
@@ -120,5 +124,5 @@ class Stats:
     def set_between_group_sum_of_squares(self): 
         between_sos = 0 
         for key in self.groups_data: 
-            between_sos += self.groups_data[key]['size'] * (self.groups_data[key]['group_mean'] - self.overall_average) ** 2
+            between_sos += self.groups_data[key]['size'] * (self.groups_data[key]['group_mean'] - self.overall_mean) ** 2
         return between_sos 
