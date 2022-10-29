@@ -28,6 +28,10 @@ class Stats:
         self.total_sum_of_squares = 0
         self.within_group_sum_of_squares = 0
         self.between_group_sum_of_squares = 0
+        self.df_between = 0
+        self.df_within = 0
+        self.mean_squares_within = 0
+        self.mean_squares_between = 0
     
     def __set_group_data(self, current_group, previous, group_index): 
         self.groups.append(current_group)
@@ -77,8 +81,12 @@ class Stats:
         self.between_group_sum_of_squares = self.set_between_group_sum_of_squares()
 
         # set degrees of freedom 
-        self.df_between = self.m - 1
         self.df_within = self.n - self.m
+        self.df_between = self.m - 1
+        
+        # set mean squares 
+        self.mean_squares_within = self.within_group_sum_of_squares / self.df_within
+        self.mean_squares_between = self.between_group_sum_of_squares / self.df_between
 
     def set_overall_mean(self): 
         mean = 0
