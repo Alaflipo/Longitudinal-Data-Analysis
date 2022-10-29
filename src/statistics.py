@@ -9,12 +9,15 @@ import pandas as pd
 class Stats: 
 
     def __init__(self, data: pd.DataFrame):
-        self.data = data 
-        self.n = len(data)
+        self.data_original = data 
+        self.n_original = len(data)
         self.c = len(data.iloc[0])
         
         self.target_name = ''
         self.grouping_name = ''
+
+        self.data = data 
+        self.n = len(data)
 
         self.m = 0 
         self.group_sizes = []
@@ -23,6 +26,8 @@ class Stats:
 
         self.overall_average = 0
         self.total_sum_of_squares = 0
+        self.within_group_sum_of_squares = 0
+        self.between_group_sum_of_squares = 0
     
     def __set_group_data(self, current_group, previous, group_index): 
         self.groups.append(current_group)
@@ -34,6 +39,9 @@ class Stats:
 
 
     def set_groups(self, group_column_name, data_column_name):
+        self.data = self.data_original.dropna(subset=[data_column_name])
+        self.n = len(self.data)
+
         # set target variable
         self.target_name = data_column_name
 
@@ -62,8 +70,11 @@ class Stats:
         # for the last group
         self.__set_group_data(current_group, previous, group_index)
 
+        self.m = len(self.group_sizes)
         self.overall_average = self.set_overall_average()
         self.total_sum_of_squares = self.set_total_sum_of_squares()
+        self.within_group_sum_of_squares = self.set_within_group_sum_of_squares()
+        self.between_group_sum_of_squares = self.set_between_group_sum_of_squares()
 
     def set_overall_average(self): 
         average = 0
@@ -76,18 +87,14 @@ class Stats:
 
     # is normally distributed with mean \mu and variance \sigma^2/m
     def mean(self, values): 
-        sum_without_missing, missing_count = self.sum(values)
-        
-        if (len(values) == missing_count): 
-            return math.nan
-        
-        # average of the non-missing values
-        average_without_missing = sum_without_missing / (len(values) - missing_count)
-        # take the average of the non-missing values
-        sum_with_missing = sum_without_missing + (missing_count * average_without_missing)
-        return sum_with_missing / len(values)
+        return self.sum(values) / len(values)
 
-    
+    def sos(self, values, average): 
+        sos = 0 
+        for i in range(len(values)): 
+            sos += (values[i] - average) ** 2
+        return sos
+
     def sum(self, values): 
         sum = 0
         missing_count = 0
@@ -97,12 +104,21 @@ class Stats:
             else: 
                 missing_count += 1
 
-        return sum, missing_count
+        return sum
 
     def set_total_sum_of_squares(self): 
-        tss = 0 
-        for i in range(self.n): 
-            print(self.data.iloc[i][self.target_name])
-            if not math.isnan(self.data.iloc[i][self.target_name]): 
-                tss += (self.data.iloc[i][self.target_name] - self.overall_average) ** 2
-        return tss 
+        return self.sos(self.data[self.target_name].to_numpy(), self.overall_average)
+
+    def set_within_group_sum_of_squares(self): 
+        within_sos = 0
+        for key in self.groups_data: 
+            sos = self.sos(self.groups_data[key]['values'], self.groups_data[key]['group_mean'])
+            self.groups_data[key]['group_sos'] = sos 
+            within_sos += sos
+        return within_sos 
+    
+    def set_between_group_sum_of_squares(self): 
+        between_sos = 0 
+        for key in self.groups_data: 
+            between_sos += self.groups_data[key]['size'] * (self.groups_data[key]['group_mean'] - self.overall_average) ** 2
+        return between_sos 

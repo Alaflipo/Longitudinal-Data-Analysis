@@ -9,6 +9,9 @@ def main():
     stats_object.set_groups('SCHOOL', 'PRE_ARITH')
     print(stats_object.overall_average)
     print(stats_object.total_sum_of_squares)
+    print(stats_object.within_group_sum_of_squares)
+    print(stats_object.between_group_sum_of_squares)
+    print(stats_object.within_group_sum_of_squares + stats_object.between_group_sum_of_squares)
 
 if __name__ == '__main__': 
     main()
