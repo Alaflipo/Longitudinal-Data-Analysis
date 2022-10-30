@@ -5,21 +5,19 @@ from src.statistics import Stats
 
 def main(): 
     schooldata = pd.read_csv('data/schooldata.csv')
-    stats_object = Stats(schooldata)
-    stats_object.set_groups('SCHOOL', 'PRE_ARITH')
-    print(stats_object.overall_mean)
-    print(stats_object.total_sum_of_squares)
-    print(stats_object.within_group_sum_of_squares)
-    print(stats_object.between_group_sum_of_squares)
-    print(stats_object.within_group_sum_of_squares + stats_object.between_group_sum_of_squares)
+    schooldata['arith_dif'] = schooldata['POST_ARITH'] - schooldata['PRE_ARITH']
+
+    anova = Stats(schooldata)
+    anova.set_groups('SCHOOL', 'arith_dif')
+
     table = [
-        [stats_object.df_between, stats_object.between_group_sum_of_squares, stats_object.mean_squares_between], 
-        [stats_object.df_within, stats_object.within_group_sum_of_squares, stats_object.mean_squares_within],
+        [anova.df_between, anova.between_group_sum_of_squares, anova.mean_squares_between, anova.ems_between, anova.sigma_g_squared, anova.F, anova.p], 
+        [anova.df_within, anova.within_group_sum_of_squares, anova.mean_squares_within, anova.ems_within, anova.sigma_e_squared],
     ]
 
     anova_table = pd.DataFrame(
         table, 
-        columns=['df', 'sums_squares', 'mean_sum_squares'], 
+        columns=['df', 'sums_squares', 'mean_sum_squares', 'expected_mean_squares', 'sigma_squared_estimation', 'F', 'p value'], 
         index=['between', 'within']
     )
 

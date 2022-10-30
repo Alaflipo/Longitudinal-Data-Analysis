@@ -5,6 +5,7 @@ This is the stats utility method
 import math 
 import numpy as np
 import pandas as pd
+import scipy
 
 class Stats: 
 
@@ -24,6 +25,7 @@ class Stats:
         self.groups = []
         self.groups_data = {}
 
+        # Mean squares 
         self.overall_mean = 0
         self.total_sum_of_squares = 0
         self.within_group_sum_of_squares = 0
@@ -32,6 +34,19 @@ class Stats:
         self.df_within = 0
         self.mean_squares_within = 0
         self.mean_squares_between = 0
+
+        # F statistic 
+        self.F = 0
+        self.p = 0 
+
+        # Parameter estimations 
+        self.sigma_e_squared = 0 
+        self.sigma_g_squared = 0 
+        self.C_n = 0 
+
+        # expected mean squares 
+        self.ems_between = 0
+        self.ems_within = 0
     
     def __set_group_data(self, current_group, previous, group_index): 
         self.groups.append(current_group)
@@ -88,6 +103,19 @@ class Stats:
         self.mean_squares_within = self.within_group_sum_of_squares / self.df_within
         self.mean_squares_between = self.between_group_sum_of_squares / self.df_between
 
+        # F statistic and p value 
+        self.F = self.mean_squares_between / self.mean_squares_within
+        self.p = self.calculate_p_values()
+
+        # parameter estimation 
+        self.sigma_e_squared = self.mean_squares_within
+        self.C_n = self.calculate_constant() 
+        self.sigma_g_squared = (self.mean_squares_between - self.mean_squares_within) / self.C_n
+
+        # expected mean squares 
+        self.ems_between = self.get_ems_between()
+        self.ems_within = self.sigma_e_squared
+
     def set_overall_mean(self): 
         mean = 0
         for key in self.groups_data: 
@@ -109,12 +137,8 @@ class Stats:
 
     def sum(self, values): 
         sum = 0
-        missing_count = 0
         for value in values: 
-            if (not math.isnan(value)):
-                sum += value
-            else: 
-                missing_count += 1
+            sum += value
 
         return sum
 
@@ -134,3 +158,21 @@ class Stats:
         for key in self.groups_data: 
             between_sos += self.groups_data[key]['size'] * (self.groups_data[key]['group_mean'] - self.overall_mean) ** 2
         return between_sos 
+    
+    def calculate_constant(self): 
+        # n_bar = self.mean(self.group_sizes) 
+        # difference = (np.array(self.group_sizes) - n_bar) ** 2
+
+        sum = 0 
+        for i in range(self.m): 
+            sum += (self.group_sizes[i] * self.group_sizes[i]) / self.n 
+
+        return (self.n - sum) / (self.m - 1)
+
+    def get_ems_between(self): 
+        x = (np.array(self.group_sizes) / self.n)
+        return ((self.n - sum(x)) / (self.m - 1)) * self.sigma_g_squared + self.sigma_e_squared
+
+    def calculate_p_values(self): 
+        return 1 - scipy.stats.f.cdf(self.F, self.df_between, self.df_within)
+
