@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import scipy
 
-class Stats: 
+class Anova: 
 
     def __init__(self, data: pd.DataFrame):
         self.data_original = data 
@@ -116,6 +116,66 @@ class Stats:
         self.ems_between = self.get_ems_between()
         self.ems_within = self.sigma_e_squared
 
+    '''
+    creates an ANOVA table based on the calculated statistics 
+    class = grouping_name, model (outcome) = target_name 
+    returns an anova table with the degrees of freedom (DOF), sums of squares, 
+    means squares, expected mean squares and parameter estimators for the variance
+    '''
+    def get_anova_table(self): 
+        table = [
+            [   # between group statistics (and F statistic + p value)
+                self.df_between, 
+                self.between_group_sum_of_squares, 
+                self.mean_squares_between, 
+                self.ems_between, 
+                self.sigma_g_squared, 
+                self.F, 
+                self.p
+            ], 
+            [   # within group statistics 
+                self.df_within, 
+                self.within_group_sum_of_squares, 
+                self.mean_squares_within, 
+                self.ems_within, 
+                self.sigma_e_squared
+            ],
+        ]
+
+        anova_table = pd.DataFrame(
+            table, 
+            columns=['df', 'sums_squares', 'mean_sum_squares', 'expected_mean_squares', 'sigma_squared_estimation', 'F', 'p value'], 
+            index=['between', 'within']
+        )
+
+        return anova_table
+
+
+    '''
+    Sums the given set of values 
+    @variable values: holds a list of numeric values 
+    @returns the summation of the given values 
+    '''
+    def sum(self, values): 
+        sum = 0
+        for value in values: 
+            sum += value
+
+        return sum
+
+    '''
+    Returns the mean of a set of given values 
+    @variable values: holds a list of numeric values 
+    @returns the mean of the values  
+    '''
+    def mean(self, values): 
+        return self.sum(values) / len(values)
+
+    '''
+    Set's the overall mean by summing over all group means and multiplying it by a weight equal
+    to the partion of the whole population 
+    @returns the overall mean 
+    '''
     def set_overall_mean(self): 
         mean = 0
         for key in self.groups_data: 
@@ -125,25 +185,25 @@ class Stats:
 
         return mean
 
-    # is normally distributed with mean \mu and variance \sigma^2/m
-    def mean(self, values): 
-        return self.sum(values) / len(values)
-
-    def sos(self, values, average): 
+    '''
+    Returns the sum of squares of a given set of values 
+    @variable values: holds a list of numeric values 
+    @variable mean: the mean of the values 
+    @returns the sum of squares from the values
+    '''
+    def sos(self, values, mean): 
         sos = 0 
         for i in range(len(values)): 
-            sos += (values[i] - average) ** 2
+            sos += (values[i] - mean) ** 2
         return sos
 
-    def sum(self, values): 
-        sum = 0
-        for value in values: 
-            sum += value
-
-        return sum
-
+    '''
+    Returns the total sum of squares using the target column 
+    @returns the total sum of squares using the overall mean of all values (grouped)
+    '''
     def set_total_sum_of_squares(self): 
         return self.sos(self.data[self.target_name].to_numpy(), self.overall_mean)
+
 
     def set_within_group_sum_of_squares(self): 
         within_sos = 0
@@ -160,9 +220,6 @@ class Stats:
         return between_sos 
     
     def calculate_constant(self): 
-        # n_bar = self.mean(self.group_sizes) 
-        # difference = (np.array(self.group_sizes) - n_bar) ** 2
-
         sum = 0 
         for i in range(self.m): 
             sum += (self.group_sizes[i] * self.group_sizes[i]) / self.n 
