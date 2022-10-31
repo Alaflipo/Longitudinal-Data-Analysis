@@ -9,11 +9,11 @@ def main():
     schooldata['LANG_DIF'] = schooldata['POST_LANG'] - schooldata['PRE_LANG']
 
     anova = Anova(schooldata)
-    anova.set_groups('SCHOOL', 'ARITH_DIF')
+    anova.set_groups('CLASS', 'ARITH_DIF')
     anova_table = anova.get_anova_table()
     print(anova_table)
 
-    anova.set_groups('SCHOOL', 'LANG_DIF')
+    anova.set_groups('CLASS', 'LANG_DIF')
     anova_table = anova.get_anova_table()
     print(anova_table)
 

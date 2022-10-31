@@ -43,6 +43,8 @@ class Anova:
         self.sigma_e_squared = 0 
         self.sigma_g_squared = 0 
         self.C_n = 0 
+        self.mean_gls = 0 # generalised least squares 
+        self.mean_ols = 0 # ordinary least squares 
 
         # expected mean squares 
         self.ems_between = 0
@@ -112,6 +114,9 @@ class Anova:
         self.C_n = self.calculate_constant() 
         self.sigma_g_squared = (self.mean_squares_between - self.mean_squares_within) / self.C_n
 
+        self.mean_gls = self.get_generalised_least_squares()
+        self.mean_ols = self.get_oprdinary_least_squares()
+
         # expected mean squares 
         self.ems_between = self.get_ems_between()
         self.ems_within = self.sigma_e_squared
@@ -153,7 +158,7 @@ class Anova:
 
     '''
     Sums the given set of values 
-    @variable values: holds a list of numeric values 
+    @param values: holds a list of numeric values 
     @returns the summation of the given values 
     '''
     def sum(self, values): 
@@ -187,10 +192,11 @@ class Anova:
 
     '''
     Returns the sum of squares of a given set of values 
-    @variable values: holds a list of numeric values 
-    @variable mean: the mean of the values 
+    @param values holds a list of numeric values 
+    @param mean the mean of the values 
     @returns the sum of squares from the values
     '''
+    
     def sos(self, values, mean): 
         sos = 0 
         for i in range(len(values)): 
@@ -232,4 +238,29 @@ class Anova:
 
     def calculate_p_values(self): 
         return 1 - scipy.stats.f.cdf(self.F, self.df_between, self.df_within)
+    
+    '''
+    Calculates the ordinary least squares estimator for the mean 
+    @returns the mean OLS estimator 
+    '''
+    def get_oprdinary_least_squares(self): 
+        sum = 0
+        for i in self.groups_data: 
+            for value in self.groups_data[i]['values']: 
+                sum += value / self.n
+        return sum 
+
+    '''
+    Calculates the generalised least squares estimator for the mean (depends on sigma_G and sigma_E)
+    @returns the mean GLS estimator 
+    '''
+    def get_generalised_least_squares(self): 
+        numerator = 0 
+        denominator = 0 
+        for i in self.groups_data: 
+            x = (self.sigma_g_squared + self.sigma_e_squared / self.groups_data[i]['size'])
+            numerator += self.groups_data[i]['group_mean'] / x
+            denominator += 1 / x
+        return numerator / denominator
+        
 
