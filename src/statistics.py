@@ -13,6 +13,9 @@ class Anova:
         self.data_original = data 
         self.n_original = len(data)
         self.c = len(data.iloc[0])
+
+        self.is_balanced = False
+        self.alpha = 0.05
         
         self.target_name = ''
         self.grouping_name = ''
@@ -44,7 +47,10 @@ class Anova:
         self.sigma_g_squared = 0 
         self.C_n = 0 
         self.mean_gls = 0 # generalised least squares 
+
         self.mean_ols = 0 # ordinary least squares 
+        self.ols_ci_lower = 0 # (confidence intervals)
+        self.ols_ci_upper = 0
 
         # expected mean squares 
         self.ems_between = 0
@@ -91,6 +97,9 @@ class Anova:
         # for the last group
         self.__set_group_data(current_group, previous, group_index)
 
+        if (self.group_sizes.count(self.group_sizes[0]) == len(self.group_sizes)):
+            self.is_balanced = True
+
         self.m = len(self.group_sizes)
         self.overall_mean = self.set_overall_mean()
         self.total_sum_of_squares = self.set_total_sum_of_squares()
@@ -110,12 +119,21 @@ class Anova:
         self.p = self.calculate_p_values()
 
         # parameter estimation 
+        # within group variance estimation (sigma e) and ci 
         self.sigma_e_squared = self.mean_squares_within
-        self.C_n = self.calculate_constant() 
+        self.sigma_e_ci_lower, self.sigma_e_ci_upper = self.get_confidence_intervals_within_group_variance()
+
+        self.C_n = self.calculate_constant() # constant used for calculation
+
+        # between group variance estimation (sigma g) and ci 
         self.sigma_g_squared = (self.mean_squares_between - self.mean_squares_within) / self.C_n
+        self.sigma_g_ci_lower, self.sigma_g_ci_upper = self.get_confidence_intervals_between_group_variance()
 
         self.mean_gls = self.get_generalised_least_squares()
-        self.mean_ols = self.get_oprdinary_least_squares()
+
+        # ordinary least squares and it's confidence intervals 
+        self.mean_ols = self.get_ordinary_least_squares()
+        self.ols_ci_lower, self.ols_ci_upper = self.get_confidence_intervals_ols()
 
         # expected mean squares 
         self.ems_between = self.get_ems_between()
@@ -237,13 +255,14 @@ class Anova:
         return ((self.n - sum(x)) / (self.m - 1)) * self.sigma_g_squared + self.sigma_e_squared
 
     def calculate_p_values(self): 
+        # based on alpha value of 0.05
         return 1 - scipy.stats.f.cdf(self.F, self.df_between, self.df_within)
     
     '''
     Calculates the ordinary least squares estimator for the mean 
     @returns the mean OLS estimator 
     '''
-    def get_oprdinary_least_squares(self): 
+    def get_ordinary_least_squares(self): 
         sum = 0
         for i in self.groups_data: 
             for value in self.groups_data[i]['values']: 
@@ -262,5 +281,70 @@ class Anova:
             numerator += self.groups_data[i]['group_mean'] / x
             denominator += 1 / x
         return numerator / denominator
-        
+
+    '''
+    Calculates the confidence intervals of the mean. OLS when data is balanced, GLS when data is unbalanced 
+        - OLS: is t distributed and can be calculated exactly (no estimation)
+        - GLS: 
+    @returns lower and upper intervals of either GLS or OLS 
+    '''
+    def get_confidence_intervals_ols(self): 
+
+        if (self.is_balanced): 
+            t_values = scipy.stats.t(df=(self.m - 1)).ppf((self.alpha / 2, 1 - self.alpha / 2))
+            # we are only interested in 1 - alpha / 2 t value 
+            variance_ci = t_values[1] * math.sqrt(self.between_group_sum_of_squares/self.n)
+            upper_ci = self.mean_ols + variance_ci
+            lower_ci = self.mean_ols - variance_ci
+            return lower_ci, upper_ci
+        else: 
+            return 0, 0
+
+    '''
+    Calculated the confidence intervals for the within variance estimator 
+        - balanced: this is chi squared distributed 
+    '''
+    def get_confidence_intervals_within_group_variance(self): 
+        if (self.is_balanced): 
+            chi_value_upper = scipy.stats.chi2.ppf(1 - self.alpha / 2, self.df_within)
+            chi_value_lower = scipy.stats.chi2.ppf(self.alpha / 2, self.df_within)
+            upper_ci = self.df_within * self.mean_squares_within / chi_value_upper
+            lower_ci = self.df_within * self.mean_squares_within / chi_value_lower
+            return upper_ci, lower_ci
+        else: 
+            return 0, 0 
+    
+    '''
+    Calculated the confidence intervals for the between variance estimator 
+    There is no exact confidence interval for this so we need to estimate 
+    Within this method two different methods are used 
+    - one based on a asymptotic approach (used in SAS) based on a normal distribution assumption and 
+    - chi squared approximation using the saitterthwaite's approach to calculate the degrees of freedom
+    '''
+    def get_confidence_intervals_between_group_variance(self): 
+        if (self.is_balanced): 
+            mode = 'assymptotic'
+
+            # estimated standard error
+            standard_error = (2 * self.mean_squares_between ** 2)/ ((self.group_sizes[0] ** 2) * (self.m - 1))
+            standard_error += (2 * self.mean_squares_within ** 2)/ ((self.m * self.group_sizes[0] ** 2) * (self.group_sizes[0] - 1))
+            standard_error = math.sqrt(standard_error)
+
+            if (mode == 'assymptotic'): 
+                # assymptotic approach where the normal distribution is used (this is what SAS uses)
+                z_value = scipy.stats.norm.ppf(1 - self.alpha / 2) # normal distribution
+                upper_ci = self.sigma_g_squared + standard_error * z_value
+                lower_ci = self.sigma_g_squared - standard_error * z_value
+                return lower_ci, upper_ci
+            elif (mode == 'saitterthwaites'): 
+                # to calculate the degrees of freedom we use saitterthwaites to approach this 
+                df_g = 2 * ((self.sigma_g_squared / standard_error) ** 2)
+                chi_value_upper = scipy.stats.chi2.ppf(1 - self.alpha / 2, df_g)
+                chi_value_lower = scipy.stats.chi2.ppf(self.alpha / 2, df_g)
+                upper_ci = df_g * self.mean_squares_within / chi_value_upper
+                lower_ci = df_g * self.mean_squares_within / chi_value_lower
+                return lower_ci, upper_ci
+        else: 
+            return 0, 0 
+
 

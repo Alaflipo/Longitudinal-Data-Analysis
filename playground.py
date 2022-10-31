@@ -4,7 +4,7 @@ import pandas as pd
 from src.statistics import Anova
 
 def main(): 
-    schooldata = pd.read_csv('data/schooldata.csv')
+    schooldata = pd.read_csv('data/balanced_data.csv')
     schooldata['ARITH_DIF'] = schooldata['POST_ARITH'] - schooldata['PRE_ARITH']
     schooldata['LANG_DIF'] = schooldata['POST_LANG'] - schooldata['PRE_LANG']
 
@@ -13,9 +13,22 @@ def main():
     anova_table = anova.get_anova_table()
     print(anova_table)
 
-    anova.set_groups('CLASS', 'LANG_DIF')
-    anova_table = anova.get_anova_table()
-    print(anova_table)
+    # print(anova.group_sizes)
+    # print(anova.m)
+    # print(anova.mean_gls)
+    # print(anova.mean_ols)
+    # print(anova.ols_ci_lower)
+    # print(anova.ols_ci_upper)
+    # print(anova.ols_ci_lower, anova.ols_ci_upper)
+    print(anova.sigma_e_squared)
+    print(anova.sigma_e_ci_lower, anova.sigma_e_ci_upper)
+    print(anova.sigma_g_squared)
+    print(anova.sigma_g_ci_lower, anova.sigma_g_ci_upper)
+    
+
+    # anova.set_groups('CLASS', 'LANG_DIF')
+    # anova_table = anova.get_anova_table()
+    # print(anova_table)
 
 if __name__ == '__main__': 
     main()
