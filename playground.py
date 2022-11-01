@@ -23,18 +23,8 @@ def main():
     print(ICC_table)
     print("\n")
 
-    # print(anova.group_sizes)
-    # print(anova.m)
-    # print(anova.mean_gls)
-    # print(anova.mean_ols)
-    # print(anova.ols_ci_lower)
-    # print(anova.ols_ci_upper)
-    # print(anova.ols_ci_lower, anova.ols_ci_upper)
-    
-
-    # anova.set_groups('CLASS', 'LANG_DIF')
-    # anova_table = anova.get_anova_table()
-    # print(anova_table)
+    print(anova.mean_gls)
+    anova.plot_residuals()
 
 if __name__ == '__main__': 
     main()

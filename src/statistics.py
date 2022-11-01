@@ -3,7 +3,8 @@ This is the stats utility method
 '''
 
 import math
-from statistics import covariance 
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
 import numpy as np
 import pandas as pd
 import scipy
@@ -168,6 +169,12 @@ class Anova:
         self.ICC = self.get_ICC()
         self.lower_ICC, self.upper_ICC = self.get_confidence_interval_ICC()
 
+        # blubs calculation 
+        self.set_blubs()
+
+        # set marginal and conditional residuals 
+        self.set_residuals()
+
     #####################################################
     #                   Visualise data                  #
     #####################################################
@@ -250,6 +257,40 @@ class Anova:
         table = [[self.lower_ICC, self.ICC, self.upper_ICC]]
         ICC_table = pd.DataFrame(table, columns=['lower', 'ICC', 'upper'], index=['ICC'])
         return ICC_table
+    
+    def plot_residuals(self): 
+        #conditional residuals 
+        figure, axis = plt.subplots(2, 2)
+
+        # blubs vs. conditional residuals
+        axis[0, 0].plot(self.data['blubs'], self.data['conditional_residuals'], 'o')
+
+        # histogram of the condtionals residuals with normal line
+        axis[0, 1].hist(self.data['conditional_residuals'], edgecolor='black', bins=24)
+
+        # qqplot of the conditional residuals 
+        scipy.stats.probplot(self.data['conditional_residuals'], dist='norm', plot=axis[1, 0])
+        axis[1, 0].set_title('')
+        axis[1, 0].set_xlabel('')
+        axis[1, 0].set_ylabel('')
+        plt.show()
+
+        # marginal residuals 
+        figure, axis = plt.subplots(2, 2)
+
+        # blubs vs. marginal residuals
+        x = [self.mean_gls] * self.n
+        axis[0, 0].plot(x, self.data['marginal_residuals'], 'o')
+
+        # histogram of the condtionals residuals with normal line
+        axis[0, 1].hist(self.data['marginal_residuals'], edgecolor='black', bins=24)
+
+        # qqplot of the conditional residuals 
+        scipy.stats.probplot(self.data['marginal_residuals'], dist='norm', plot=axis[1, 0])
+        axis[1, 0].set_title('')
+        axis[1, 0].set_xlabel('')
+        axis[1, 0].set_ylabel('')
+        plt.show()
 
     
     #####################################################
@@ -539,9 +580,63 @@ class Anova:
             return ICC 
     
     #####################################################
-    #          Intraclass Correlation Coeficient        #
+    #      Best Linear Unbiased Predictor (BLUP)        #
     #####################################################
 
+    # sets the blubs which take into account that the class effects are random and should be modeled like that 
+    def set_blubs(self): 
+        all_blubs = []
+        for key in self.groups_data:
+            blub = self.mean_gls
+            blub += (self.sigma_g_squared / (self.sigma_g_squared + self.sigma_e_squared / self.groups_data[key]['size'])) * \
+                (self.groups_data[key]['group_mean'] - self.mean_gls)
+            self.groups_data[key]['blub'] = blub 
+            for value in self.groups_data[key]['values']: 
+                all_blubs.append(blub)
+        
+        self.data['blubs'] = all_blubs
+    
+    #####################################################
+    #                    Residuals                      #
+    #####################################################
+
+    # set's both the marginal and conditional residuals 
+    # - condtional: subtracts both the fixed effects and random effects using the blubs 
+    # - marginal: subtracts only the fixed effects by subtracting the generalised least squares
+    # it can use two different standarization modes: 
+    # - standardized residuals (student): which devides by its own variance 
+    # - persons's residuals: which devides by the variance of the corresponding observation (implemented later)
+    def set_residuals(self): 
+        standarisation_mode = 'pearson'
+        all_marginal_residuals = []
+        all_conditional_residuals = []
+
+        for key in self.groups_data:
+            conditional_residuals = []
+            marginal_residuals = []
+            for data_point in self.groups_data[key]['values']:
+                standardized = 0 
+                if (standarisation_mode == 'pearson'): 
+                    standardized = math.sqrt(self.sigma_e_squared + self.sigma_g_squared)
+                else: 
+                    standardized = math.sqrt(1)
+
+                # conditional residual calculation
+                con_resid = (data_point - self.groups_data[key]['blub']) / standardized
+                conditional_residuals.append(con_resid)
+                all_conditional_residuals.append(con_resid)
+                # marginal residual calculation 
+                mar_resid = (data_point - self.mean_gls) / standardized
+                marginal_residuals.append(mar_resid)
+                all_marginal_residuals.append(mar_resid)
+
+            self.groups_data[key]['conditional_resid'] = conditional_residuals
+            self.groups_data[key]['marginal_resid'] = marginal_residuals
+        
+        self.data['marginal_residuals'] = all_marginal_residuals
+        self.data['conditional_residuals'] = all_conditional_residuals
+        
+        
     
 
     
