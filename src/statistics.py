@@ -32,6 +32,7 @@ class Anova:
         # Mean squares 
         self.overall_mean = 0
         self.total_sum_of_squares = 0
+        self.df_total = 0 
         self.within_group_sum_of_squares = 0
         self.between_group_sum_of_squares = 0
         self.df_between = 0
@@ -52,6 +53,10 @@ class Anova:
         self.sigma_g_ci_lower, self.sigma_g_ci_upper = 0, 0 
         self.standard_error_between_variance = 0 
         self.between_z_value = 0 
+
+        self.sigma_t_squared = 0 
+        self.standard_error_total_variance = 0
+        self.sigma_t_ci_lower, self.sigma_t_ci_upper = 0, 0
 
         self.C_n = 0 
         self.mean_gls = 0 # generalised least squares 
@@ -124,40 +129,48 @@ class Anova:
         self.df_between = self.m - 1
         
         # set mean squares 
-        self.mean_squares_within = self.within_group_sum_of_squares / self.df_within
-        self.mean_squares_between = self.between_group_sum_of_squares / self.df_between
+        self.mean_squares_within = self.get_mean_squares_within()
+        self.mean_squares_between = self.get_mean_squares_between()
 
         # F statistic and p value 
-        self.F = self.mean_squares_between / self.mean_squares_within
+        self.F = self.calculate_F_value()
         self.p = self.calculate_p_values()
 
         # parameter estimation 
+        self.C_n = self.calculate_constant() # constant used for calculation
         # within group variance estimation (sigma e) and ci 
-        self.sigma_e_squared = self.mean_squares_within
+        self.sigma_e_squared = self.get_sigma_e_squared()
         self.standard_error_within_variance = self.get_standard_error_within_variance() 
         self.sigma_e_ci_lower, self.sigma_e_ci_upper = self.get_confidence_intervals_within_group_variance()
 
-        #constant 
-        self.C_n = self.calculate_constant() # constant used for calculation
-
         # between group variance estimation (sigma g) and ci 
-        self.sigma_g_squared = (self.mean_squares_between - self.mean_squares_within) / self.C_n
+        self.sigma_g_squared = self.get_sigma_g_squared()
         self.standard_error_between_variance = self.get_standard_error_between_variance()
         self.sigma_g_ci_lower, self.sigma_g_ci_upper = self.get_confidence_intervals_between_group_variance()
 
-        self.mean_gls = self.get_generalised_least_squares()
+        # total group variance estimation (sigma t) and ci
+        self.sigma_t_squared = self.get_sigma_t_squared()
+        self.standard_error_total_variance = self.get_standard_error_total_variance()
+        self.sigma_t_ci_lower, self.sigma_t_ci_upper = self.get_confidence_intervals_total_variance()
 
         # ordinary least squares and it's confidence intervals 
         self.mean_ols = self.get_ordinary_least_squares()
         self.ols_ci_lower, self.ols_ci_upper = self.get_confidence_intervals_ols()
 
+        # generalised least squares and it's confidence intervals 
+        self.mean_gls = self.get_generalised_least_squares()
+
         # expected mean squares 
         self.ems_between = self.get_ems_between()
-        self.ems_within = self.sigma_e_squared
+        self.ems_within = self.get_ems_within()
 
         # Interclass correclation coeficient (ICC)
         self.ICC = self.get_ICC()
         self.lower_ICC, self.upper_ICC = self.get_confidence_interval_ICC()
+
+    #####################################################
+    #                   Visualise data                  #
+    #####################################################
 
     '''
     creates an ANOVA table based on the calculated statistics 
@@ -214,12 +227,21 @@ class Anova:
                 self.sigma_e_ci_upper
 
             ],
+            [   # total group variance estimator  
+                self.sigma_t_squared,
+                self.standard_error_total_variance, 
+                math.nan, 
+                math.nan, 
+                self.sigma_t_ci_lower,
+                self.sigma_t_ci_upper
+
+            ]
         ]
 
         covariance_table = pd.DataFrame(
             table, 
             columns=['estimate', 'standard_error', 'z_value', 'p_value', 'lower', 'upper'], 
-            index=['group', 'residual']
+            index=['group', 'residual', 'total']
         )
 
         return covariance_table
@@ -229,7 +251,10 @@ class Anova:
         ICC_table = pd.DataFrame(table, columns=['lower', 'ICC', 'upper'], index=['ICC'])
         return ICC_table
 
-
+    
+    #####################################################
+    #                   Calculations                    #
+    #####################################################
     '''
     Sums the given set of values 
     @param values: holds a list of numeric values 
@@ -263,6 +288,17 @@ class Anova:
                 mean += (self.groups_data[key]['size'] / self.n) * self.groups_data[key]['group_mean']
 
         return mean
+    
+    def calculate_p_values(self): 
+        # based on alpha value of 0.05
+        return 1 - scipy.stats.f.cdf(self.F, self.df_between, self.df_within)
+    
+    def calculate_F_value(self):
+        return self.between_group_sum_of_squares / self.df_between
+    
+    #####################################################
+    #                   Sums of squares                 #
+    #####################################################
 
     '''
     Returns the sum of squares of a given set of values 
@@ -276,6 +312,7 @@ class Anova:
         for i in range(len(values)): 
             sos += (values[i] - mean) ** 2
         return sos
+
 
     '''
     Returns the total sum of squares using the target column 
@@ -299,6 +336,23 @@ class Anova:
             between_sos += self.groups_data[key]['size'] * (self.groups_data[key]['group_mean'] - self.overall_mean) ** 2
         return between_sos 
     
+    #####################################################
+    #                   Mean squares                    #
+    #####################################################
+    
+    def get_mean_squares_within(self): 
+        return self.within_group_sum_of_squares / self.df_within
+    
+    def get_mean_squares_between(self): 
+        return self.between_group_sum_of_squares / self.df_between
+    
+    #####################################################
+    #                Parameter Estimation               #
+    #####################################################
+
+    def get_sigma_e_squared(self): 
+        return self.mean_squares_within
+    
     def calculate_constant(self): 
         sum = 0 
         for i in range(self.m): 
@@ -306,14 +360,144 @@ class Anova:
 
         return (self.n - sum) / (self.m - 1)
 
+    def get_sigma_g_squared(self):
+        return (self.mean_squares_between - self.mean_squares_within) / self.C_n
+
+    def get_sigma_t_squared(self):
+        return self.sigma_g_squared + self.sigma_e_squared
+    
+    #####################################################
+    #               Expected Mean Squares               #
+    #####################################################
+
     def get_ems_between(self): 
         x = (np.array(self.group_sizes) / self.n)
         return ((self.n - sum(x)) / (self.m - 1)) * self.sigma_g_squared + self.sigma_e_squared
-
-    def calculate_p_values(self): 
-        # based on alpha value of 0.05
-        return 1 - scipy.stats.f.cdf(self.F, self.df_between, self.df_within)
     
+    def get_ems_within(self): 
+        return self.sigma_e_squared
+
+    #####################################################
+    #                   STANDARD ERROR                  #
+    #####################################################
+
+    def get_standard_error_total_variance(self): 
+        if (self.is_balanced): 
+            # estimated standard error
+            variance = (2 * self.mean_squares_between ** 2) / ((self.group_sizes[0] ** 2) * (self.m - 1))
+            variance += ((2 * (self.group_sizes[0] - 1) ** 2) * (self.mean_squares_within ** 2)) / ((self.group_sizes[0] - 1) * self.m * self.group_sizes[0] ** 2)
+            return math.sqrt(variance)
+        else: 
+            # estimated standard error
+            variance = (2 * self.mean_squares_between ** 2) / ((self.C_n ** 2) * (self.m - 1))
+            variance += ((2 * (self.C_n - 1) ** 2) * (self.mean_squares_within ** 2)) / ((self.n - self.m) * self.C_n ** 2)
+            return math.sqrt(variance)
+    
+    def get_standard_error_between_variance(self): 
+        # estimated standard error
+        standard_error = (2 * self.mean_squares_between ** 2)/ ((self.C_n ** 2) * (self.m - 1))
+        standard_error += (2 * self.mean_squares_within ** 2)/ ((self.m * self.C_n ** 2) * (self.C_n - 1))
+        return math.sqrt(standard_error)
+    
+    def get_standard_error_within_variance(self): 
+        return math.sqrt(2 * self.mean_squares_within ** 2/self.df_within)
+    
+    #####################################################
+    #               Confidence Intervals                #
+    #####################################################
+
+    def get_confidence_intervals_total_variance(self): 
+        variance = self.standard_error_total_variance
+        df_total = 2 * (self.sigma_t_squared / variance) ** 2
+
+        chi_value_upper = scipy.stats.chi2.ppf(1 - self.alpha / 2, df_total)
+        chi_value_lower = scipy.stats.chi2.ppf(self.alpha / 2, df_total)
+
+        ci_lower = df_total * self.sigma_t_squared / chi_value_upper
+        ci_upper = df_total * self.sigma_t_squared / chi_value_lower
+
+        return ci_lower, ci_upper
+    
+    '''
+    Calculated the confidence intervals for the within variance estimator 
+        - balanced: this is chi squared distributed 
+    '''
+    def get_confidence_intervals_within_group_variance(self): 
+
+        # We are not using the standard error for this calculation 
+        standard_error = self.standard_error_within_variance
+
+        chi_value_upper = scipy.stats.chi2.ppf(1 - self.alpha / 2, self.df_within)
+        chi_value_lower = scipy.stats.chi2.ppf(self.alpha / 2, self.df_within)
+        upper_ci = self.df_within * self.mean_squares_within / chi_value_upper
+        lower_ci = self.df_within * self.mean_squares_within / chi_value_lower
+        return upper_ci, lower_ci
+    
+    '''
+    Calculated the confidence intervals for the between variance estimator 
+    There is no exact confidence interval for this so we need to estimate 
+    Within this method two different methods are used 
+    - one based on a asymptotic approach (used in SAS) based on a normal distribution assumption and 
+    - chi squared approximation using the saitterthwaite's approach to calculate the degrees of freedom
+    '''
+    def get_confidence_intervals_between_group_variance(self): 
+        mode = 'saitterthwaites'
+
+        standard_error = self.standard_error_between_variance
+
+        if (mode == 'assymptotic'): 
+            # assymptotic approach where the normal distribution is used (this is what SAS uses)
+            z_value = scipy.stats.norm.ppf(1 - self.alpha / 2) # normal distribution
+            self.between_z_value = z_value #!needs editing 
+            upper_ci = self.sigma_g_squared + standard_error * z_value
+            lower_ci = self.sigma_g_squared - standard_error * z_value
+            return lower_ci, upper_ci
+        elif (mode == 'saitterthwaites'): 
+            # to calculate the degrees of freedom we use saitterthwaites to approach this 
+            df_g = 2 * (self.sigma_g_squared / standard_error) ** 2
+            chi_value_upper = scipy.stats.chi2.ppf(1 - self.alpha / 2, df_g)
+            chi_value_lower = scipy.stats.chi2.ppf(self.alpha / 2, df_g)
+            upper_ci = df_g * self.sigma_g_squared / chi_value_lower
+            lower_ci = df_g * self.sigma_g_squared / chi_value_upper
+            return lower_ci, upper_ci
+
+    '''
+    Calculates the confidence intervals of the mean. OLS when data is balanced, GLS when data is unbalanced 
+        - OLS: is t distributed and can be calculated exactly (no estimation)
+    @returns lower and upper intervals of either GLS or OLS 
+    '''
+    def get_confidence_intervals_ols(self): 
+
+        if (self.is_balanced): 
+            t_values = scipy.stats.t(df=(self.m - 1)).ppf((self.alpha / 2, 1 - self.alpha / 2))
+            # we are only interested in 1 - alpha / 2 t value 
+            variance_ci = t_values[1] * math.sqrt(self.mean_squares_between/self.n)
+            upper_ci = self.mean_ols + variance_ci
+            lower_ci = self.mean_ols - variance_ci
+            return lower_ci, upper_ci
+        else: 
+            return 0, 0
+    
+    def get_confidence_intervals_gls(self): 
+        return 0 
+    
+    def get_confidence_interval_ICC(self): 
+        group_constant = 0
+        if (self.is_balanced): 
+            group_constant = self.group_sizes[0]
+        else: 
+            group_constant = self.C_n
+
+        F_L = scipy.stats.f.ppf(self.alpha / 2, self.df_between, self.df_within)
+        F_U = scipy.stats.f.ppf(1 - self.alpha / 2, self.df_between, self.df_within)
+        lower_ci = (self.F / F_U - 1) / (self.F / F_U + group_constant - 1)
+        upper_ci = (self.F / F_L - 1) / (self.F / F_L + group_constant - 1)
+
+        return lower_ci, upper_ci 
+    
+    #####################################################
+    #               Least Squares Estimation            #
+    #####################################################
     '''
     Calculates the ordinary least squares estimator for the mean 
     @returns the mean OLS estimator 
@@ -337,82 +521,10 @@ class Anova:
             numerator += self.groups_data[i]['group_mean'] / x
             denominator += 1 / x
         return numerator / denominator
-    
-    def get_standard_error_between_variance(self): 
-        # estimated standard error
-        standard_error = (2 * self.mean_squares_between ** 2)/ ((self.group_sizes[0] ** 2) * (self.m - 1))
-        standard_error += (2 * self.mean_squares_within ** 2)/ ((self.m * self.group_sizes[0] ** 2) * (self.group_sizes[0] - 1))
-        return math.sqrt(standard_error)
-    
-    def get_standard_error_within_variance(self): 
-        # estimated standard error
-        return 0 
 
-    '''
-    Calculates the confidence intervals of the mean. OLS when data is balanced, GLS when data is unbalanced 
-        - OLS: is t distributed and can be calculated exactly (no estimation)
-        - GLS: 
-    @returns lower and upper intervals of either GLS or OLS 
-    '''
-    def get_confidence_intervals_ols(self): 
-
-        if (self.is_balanced): 
-            t_values = scipy.stats.t(df=(self.m - 1)).ppf((self.alpha / 2, 1 - self.alpha / 2))
-            # we are only interested in 1 - alpha / 2 t value 
-            variance_ci = t_values[1] * math.sqrt(self.between_group_sum_of_squares/self.n)
-            upper_ci = self.mean_ols + variance_ci
-            lower_ci = self.mean_ols - variance_ci
-            return lower_ci, upper_ci
-        else: 
-            return 0, 0
-
-    '''
-    Calculated the confidence intervals for the within variance estimator 
-        - balanced: this is chi squared distributed 
-    '''
-    def get_confidence_intervals_within_group_variance(self): 
-
-        standard_error = self.standard_error_within_variance
-
-        if (self.is_balanced): 
-            chi_value_upper = scipy.stats.chi2.ppf(1 - self.alpha / 2, self.df_within)
-            chi_value_lower = scipy.stats.chi2.ppf(self.alpha / 2, self.df_within)
-            upper_ci = self.df_within * self.mean_squares_within / chi_value_upper
-            lower_ci = self.df_within * self.mean_squares_within / chi_value_lower
-            return upper_ci, lower_ci
-        else: 
-            return 0, 0 
-    
-    '''
-    Calculated the confidence intervals for the between variance estimator 
-    There is no exact confidence interval for this so we need to estimate 
-    Within this method two different methods are used 
-    - one based on a asymptotic approach (used in SAS) based on a normal distribution assumption and 
-    - chi squared approximation using the saitterthwaite's approach to calculate the degrees of freedom
-    '''
-    def get_confidence_intervals_between_group_variance(self): 
-        if (self.is_balanced): 
-            mode = 'assymptotic'
-
-            standard_error = self.standard_error_between_variance
-
-            if (mode == 'assymptotic'): 
-                # assymptotic approach where the normal distribution is used (this is what SAS uses)
-                z_value = scipy.stats.norm.ppf(1 - self.alpha / 2) # normal distribution
-                self.between_z_value = z_value #!needs editing 
-                upper_ci = self.sigma_g_squared + standard_error * z_value
-                lower_ci = self.sigma_g_squared - standard_error * z_value
-                return lower_ci, upper_ci
-            elif (mode == 'saitterthwaites'): 
-                # to calculate the degrees of freedom we use saitterthwaites to approach this 
-                df_g = 2 * ((self.sigma_g_squared / standard_error) ** 2)
-                chi_value_upper = scipy.stats.chi2.ppf(1 - self.alpha / 2, df_g)
-                chi_value_lower = scipy.stats.chi2.ppf(self.alpha / 2, df_g)
-                upper_ci = df_g * self.mean_squares_within / chi_value_upper
-                lower_ci = df_g * self.mean_squares_within / chi_value_lower
-                return lower_ci, upper_ci
-        else: 
-            return 0, 0 
+    #####################################################
+    #          Intraclass Correlation Coeficient        #
+    #####################################################
     
     def get_ICC(self):
         if (self.is_balanced):  
@@ -420,14 +532,21 @@ class Anova:
             self.F = F 
             ICC = (F - 1) / (F + self.group_sizes[0] - 1)
             return ICC 
+        else: 
+            F = self.mean_squares_between / self.mean_squares_within
+            self.F = F 
+            ICC = (F - 1) / (F + self.C_n - 1)
+            return ICC 
     
-    def get_confidence_interval_ICC(self): 
-        if (self.is_balanced): 
-            F_L = scipy.stats.f.ppf(self.alpha / 2, self.df_between, self.df_within)
-            F_U = scipy.stats.f.ppf(1 - self.alpha / 2, self.df_between, self.df_within)
-            lower_ci = (self.F / F_U - 1) / (self.F / F_U + self.group_sizes[0] - 1)
-            upper_ci = (self.F / F_L - 1) / (self.F / F_L + self.group_sizes[0] - 1)
-            return lower_ci, upper_ci 
+    #####################################################
+    #          Intraclass Correlation Coeficient        #
+    #####################################################
+
+    
+
+    
+    
+
 
 
 

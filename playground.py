@@ -4,7 +4,7 @@ import pandas as pd
 from src.statistics import Anova
 
 def main(): 
-    schooldata = pd.read_csv('data/balanced_data.csv')
+    schooldata = pd.read_csv('data/schooldata.csv')
     schooldata['ARITH_DIF'] = schooldata['POST_ARITH'] - schooldata['PRE_ARITH']
     schooldata['LANG_DIF'] = schooldata['POST_LANG'] - schooldata['PRE_LANG']
 
