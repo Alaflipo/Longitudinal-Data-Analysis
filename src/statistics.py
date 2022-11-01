@@ -2,7 +2,8 @@
 This is the stats utility method
 '''
 
-import math 
+import math
+from statistics import covariance 
 import numpy as np
 import pandas as pd
 import scipy
@@ -44,7 +45,14 @@ class Anova:
 
         # Parameter estimations 
         self.sigma_e_squared = 0 
+        self.sigma_e_ci_lower, self.sigma_e_ci_upper = 0, 0
+        self.standard_error_within_variance = 0 
+
         self.sigma_g_squared = 0 
+        self.sigma_g_ci_lower, self.sigma_g_ci_upper = 0, 0 
+        self.standard_error_between_variance = 0 
+        self.between_z_value = 0 
+
         self.C_n = 0 
         self.mean_gls = 0 # generalised least squares 
 
@@ -55,6 +63,11 @@ class Anova:
         # expected mean squares 
         self.ems_between = 0
         self.ems_within = 0
+
+        #ICC 
+        self.ICC = 0 
+        self.F = 0
+        self.lower_ICC, self.upper_ICC = 0, 0
     
     def __set_group_data(self, current_group, previous, group_index): 
         self.groups.append(current_group)
@@ -121,12 +134,15 @@ class Anova:
         # parameter estimation 
         # within group variance estimation (sigma e) and ci 
         self.sigma_e_squared = self.mean_squares_within
+        self.standard_error_within_variance = self.get_standard_error_within_variance() 
         self.sigma_e_ci_lower, self.sigma_e_ci_upper = self.get_confidence_intervals_within_group_variance()
 
+        #constant 
         self.C_n = self.calculate_constant() # constant used for calculation
 
         # between group variance estimation (sigma g) and ci 
         self.sigma_g_squared = (self.mean_squares_between - self.mean_squares_within) / self.C_n
+        self.standard_error_between_variance = self.get_standard_error_between_variance()
         self.sigma_g_ci_lower, self.sigma_g_ci_upper = self.get_confidence_intervals_between_group_variance()
 
         self.mean_gls = self.get_generalised_least_squares()
@@ -138,6 +154,10 @@ class Anova:
         # expected mean squares 
         self.ems_between = self.get_ems_between()
         self.ems_within = self.sigma_e_squared
+
+        # Interclass correclation coeficient (ICC)
+        self.ICC = self.get_ICC()
+        self.lower_ICC, self.upper_ICC = self.get_confidence_interval_ICC()
 
     '''
     creates an ANOVA table based on the calculated statistics 
@@ -172,6 +192,42 @@ class Anova:
         )
 
         return anova_table
+    
+    def get_covariance_table(self): 
+
+        table = [
+            [   # between group variance estimator 
+                self.sigma_g_squared, 
+                self.standard_error_between_variance, 
+                self.between_z_value, 
+                math.nan, 
+                self.sigma_g_ci_lower, 
+                self.sigma_g_ci_upper
+
+            ], 
+            [   # within group variance estimator  
+                self.sigma_e_squared,
+                self.standard_error_within_variance, 
+                math.nan, 
+                math.nan, 
+                self.sigma_e_ci_lower,
+                self.sigma_e_ci_upper
+
+            ],
+        ]
+
+        covariance_table = pd.DataFrame(
+            table, 
+            columns=['estimate', 'standard_error', 'z_value', 'p_value', 'lower', 'upper'], 
+            index=['group', 'residual']
+        )
+
+        return covariance_table
+
+    def get_ICC_table(self): 
+        table = [[self.lower_ICC, self.ICC, self.upper_ICC]]
+        ICC_table = pd.DataFrame(table, columns=['lower', 'ICC', 'upper'], index=['ICC'])
+        return ICC_table
 
 
     '''
@@ -281,6 +337,16 @@ class Anova:
             numerator += self.groups_data[i]['group_mean'] / x
             denominator += 1 / x
         return numerator / denominator
+    
+    def get_standard_error_between_variance(self): 
+        # estimated standard error
+        standard_error = (2 * self.mean_squares_between ** 2)/ ((self.group_sizes[0] ** 2) * (self.m - 1))
+        standard_error += (2 * self.mean_squares_within ** 2)/ ((self.m * self.group_sizes[0] ** 2) * (self.group_sizes[0] - 1))
+        return math.sqrt(standard_error)
+    
+    def get_standard_error_within_variance(self): 
+        # estimated standard error
+        return 0 
 
     '''
     Calculates the confidence intervals of the mean. OLS when data is balanced, GLS when data is unbalanced 
@@ -305,6 +371,9 @@ class Anova:
         - balanced: this is chi squared distributed 
     '''
     def get_confidence_intervals_within_group_variance(self): 
+
+        standard_error = self.standard_error_within_variance
+
         if (self.is_balanced): 
             chi_value_upper = scipy.stats.chi2.ppf(1 - self.alpha / 2, self.df_within)
             chi_value_lower = scipy.stats.chi2.ppf(self.alpha / 2, self.df_within)
@@ -325,14 +394,12 @@ class Anova:
         if (self.is_balanced): 
             mode = 'assymptotic'
 
-            # estimated standard error
-            standard_error = (2 * self.mean_squares_between ** 2)/ ((self.group_sizes[0] ** 2) * (self.m - 1))
-            standard_error += (2 * self.mean_squares_within ** 2)/ ((self.m * self.group_sizes[0] ** 2) * (self.group_sizes[0] - 1))
-            standard_error = math.sqrt(standard_error)
+            standard_error = self.standard_error_between_variance
 
             if (mode == 'assymptotic'): 
                 # assymptotic approach where the normal distribution is used (this is what SAS uses)
                 z_value = scipy.stats.norm.ppf(1 - self.alpha / 2) # normal distribution
+                self.between_z_value = z_value #!needs editing 
                 upper_ci = self.sigma_g_squared + standard_error * z_value
                 lower_ci = self.sigma_g_squared - standard_error * z_value
                 return lower_ci, upper_ci
@@ -346,5 +413,21 @@ class Anova:
                 return lower_ci, upper_ci
         else: 
             return 0, 0 
+    
+    def get_ICC(self):
+        if (self.is_balanced):  
+            F = self.mean_squares_between / self.mean_squares_within
+            self.F = F 
+            ICC = (F - 1) / (F + self.group_sizes[0] - 1)
+            return ICC 
+    
+    def get_confidence_interval_ICC(self): 
+        if (self.is_balanced): 
+            F_L = scipy.stats.f.ppf(self.alpha / 2, self.df_between, self.df_within)
+            F_U = scipy.stats.f.ppf(1 - self.alpha / 2, self.df_between, self.df_within)
+            lower_ci = (self.F / F_U - 1) / (self.F / F_U + self.group_sizes[0] - 1)
+            upper_ci = (self.F / F_L - 1) / (self.F / F_L + self.group_sizes[0] - 1)
+            return lower_ci, upper_ci 
+
 
 

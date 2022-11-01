@@ -11,7 +11,17 @@ def main():
     anova = Anova(schooldata)
     anova.set_groups('CLASS', 'ARITH_DIF')
     anova_table = anova.get_anova_table()
+    covariance_table = anova.get_covariance_table()
+    ICC_table = anova.get_ICC_table()
+    print("ANOVA table:")
     print(anova_table)
+    print("\n")
+    print("Covariance table:")
+    print(covariance_table)
+    print("\n")
+    print("ICC table:")
+    print(ICC_table)
+    print("\n")
 
     # print(anova.group_sizes)
     # print(anova.m)
@@ -20,10 +30,6 @@ def main():
     # print(anova.ols_ci_lower)
     # print(anova.ols_ci_upper)
     # print(anova.ols_ci_lower, anova.ols_ci_upper)
-    print(anova.sigma_e_squared)
-    print(anova.sigma_e_ci_lower, anova.sigma_e_ci_upper)
-    print(anova.sigma_g_squared)
-    print(anova.sigma_g_ci_lower, anova.sigma_g_ci_upper)
     
 
     # anova.set_groups('CLASS', 'LANG_DIF')
