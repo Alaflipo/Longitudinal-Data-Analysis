@@ -1,5 +1,7 @@
 '''
-This is the stats utility method
+This class holds the Oneway ANOVA table 
+@author Morris Boers
+@date 2/11/2022 
 '''
 
 import math
@@ -9,7 +11,7 @@ import numpy as np
 import pandas as pd
 import scipy
 
-class Anova: 
+class OnewayAnova: 
 
     def __init__(self, data: pd.DataFrame):
         self.data_original = data 

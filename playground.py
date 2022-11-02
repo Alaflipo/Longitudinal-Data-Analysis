@@ -2,14 +2,14 @@ from math import sqrt
 import numpy as np 
 import pandas as pd 
 
-from src.statistics import Anova
+from src.oneway_anova import OnewayAnova
 
 def main(): 
     schooldata = pd.read_csv('data/balanced_data.csv')
     schooldata['ARITH_DIF'] = schooldata['POST_ARITH'] - schooldata['PRE_ARITH']
     schooldata['LANG_DIF'] = schooldata['POST_LANG'] - schooldata['PRE_LANG']
 
-    anova = Anova(schooldata)
+    anova = OnewayAnova(schooldata)
     anova.set_groups('CLASS', 'ARITH_DIF')
 
     anova_table = anova.get_anova_table()
@@ -45,9 +45,6 @@ def main():
         print("Comparison of anova, ml and reml estimators:")
         print(comparison_table)
         print("\n")
-
-    
-    
 
 
 if __name__ == '__main__': 
