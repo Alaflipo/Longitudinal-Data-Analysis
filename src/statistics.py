@@ -24,6 +24,7 @@ class Anova:
 
         self.data = data 
         self.n = len(data)
+        self.n_0 = 0 
 
         self.m = 0 
         self.group_sizes = []
@@ -74,6 +75,16 @@ class Anova:
         self.ICC = 0 
         self.F = 0
         self.lower_ICC, self.upper_ICC = 0, 0
+
+        # maximum likelihood estimation 
+        self.mean_ml = 0
+        self.ml_sigma_e_squared = 0
+        self.ml_sigma_g_squared = 0 
+
+        self.ml_lambda = 0 
+        self.ml_standard_error_mean = 0
+        self.ml_standard_error_sigma_g = 0 
+        self.ml_standard_error_sigma_e = 0 
     
     def __set_group_data(self, current_group, previous, group_index): 
         self.groups.append(current_group)
@@ -118,6 +129,8 @@ class Anova:
 
         if (self.group_sizes.count(self.group_sizes[0]) == len(self.group_sizes)):
             self.is_balanced = True
+        
+        self.n_0 = self.group_sizes[0]
 
         self.m = len(self.group_sizes)
         self.overall_mean = self.set_overall_mean()
@@ -174,6 +187,16 @@ class Anova:
 
         # set marginal and conditional residuals 
         self.set_residuals()
+
+        # maximum likelihood estimation 
+        self.ml_mean = self.get_ml_mean()
+        self.ml_sigma_g_squared = self.get_ml_sigma_g_squared()
+        self.ml_sigma_e_squared = self.get_ml_sigma_e_squared()
+
+        self.ml_lambda = self.get_ml_lambda()
+        self.ml_standard_error_mean = self.get_ml_standard_error_mean()
+        self.ml_standard_error_sigma_g = self.get_ml_standard_error_sigma_g()
+        self.ml_standard_error_sigma_e = self.get_ml_standard_error_sigma_e()
 
     #####################################################
     #                   Visualise data                  #
@@ -425,8 +448,8 @@ class Anova:
     def get_standard_error_total_variance(self): 
         if (self.is_balanced): 
             # estimated standard error
-            variance = (2 * self.mean_squares_between ** 2) / ((self.group_sizes[0] ** 2) * (self.m - 1))
-            variance += ((2 * (self.group_sizes[0] - 1) ** 2) * (self.mean_squares_within ** 2)) / ((self.group_sizes[0] - 1) * self.m * self.group_sizes[0] ** 2)
+            variance = (2 * self.mean_squares_between ** 2) / ((self.n_0 ** 2) * (self.m - 1))
+            variance += ((2 * (self.n_0 - 1) ** 2) * (self.mean_squares_within ** 2)) / ((self.n_0 - 1) * self.m * self.n_0 ** 2)
             return math.sqrt(variance)
         else: 
             # estimated standard error
@@ -525,7 +548,7 @@ class Anova:
     def get_confidence_interval_ICC(self): 
         group_constant = 0
         if (self.is_balanced): 
-            group_constant = self.group_sizes[0]
+            group_constant = self.n_0
         else: 
             group_constant = self.C_n
 
@@ -571,7 +594,7 @@ class Anova:
         if (self.is_balanced):  
             F = self.mean_squares_between / self.mean_squares_within
             self.F = F 
-            ICC = (F - 1) / (F + self.group_sizes[0] - 1)
+            ICC = (F - 1) / (F + self.n_0 - 1)
             return ICC 
         else: 
             F = self.mean_squares_between / self.mean_squares_within
@@ -635,6 +658,45 @@ class Anova:
         
         self.data['marginal_residuals'] = all_marginal_residuals
         self.data['conditional_residuals'] = all_conditional_residuals
+
+    #####################################################
+    #        Maximum Likelihood (ML) estimation         #
+    #####################################################
+    
+    def get_ml_mean(self): 
+        return self.overall_mean
+    
+    def get_ml_sigma_g_squared(self): 
+        estimator = ((self.m - 1) * self.mean_squares_between/self.m - self.mean_squares_within) / self.n_0
+        return max(0, estimator)
+
+    def get_ml_sigma_e_squared(self): 
+        if (self.ml_sigma_g_squared > 0): 
+            return self.mean_squares_within
+        else: 
+            return (self.between_group_sum_of_squares + self.within_group_sum_of_squares) / (self.m * self.n_0)
+
+    def get_ml_lambda(self): 
+        return self.n_0 * self.ml_sigma_g_squared + self.ml_sigma_e_squared
+
+    def get_ml_standard_error_mean(self): 
+        return self.ml_lambda / (self.m * self.n_0)
+    
+    def get_ml_standard_error_sigma_g(self): 
+        first_part = (2 * self.ml_sigma_e_squared ** 2) / (self.m * self.n_0 ** 2)
+        second_part = (1/(self.n_0 - 1)) + (self.ml_lambda ** 2 / self.ml_sigma_e_squared ** 2)
+        return first_part * second_part
+    
+    def get_ml_standard_error_sigma_e(self): 
+        self.get_ml_ci_mean()
+        return (2 * self.ml_sigma_e_squared ** 2) / (self.m * (self.n_0 - 1))
+
+    def get_ml_ci_mean(self): 
+        t_values = scipy.stats.t(df=(self.m - 1)).ppf((self.alpha / 2, 1 - self.alpha / 2))
+        t_score = ((self.ml_mean) / self.ml_standard_error_mean) * math.sqrt(self.n)
+        print(t_score)
+        print(t_values)
+
         
         
     
