@@ -15,8 +15,8 @@ def main():
     anova_table = anova.get_anova_table()
     covariance_table = anova.get_covariance_table()
     ICC_table = anova.get_ICC_table()
-
-    # print ANOVA, covariance and ICC table 
+    
+    # print ANOVA, covariance, ICC and maximum likelihood (ML) table 
     print("ANOVA table:")
     print(anova_table)
     print("\n")
@@ -28,15 +28,27 @@ def main():
     print("\n")
 
     # plot conditional and marginal residuals 
-    # anova.plot_residuals()
+    anova.plot_residuals()
 
-    print(anova.ml_mean)
-    print(anova.ml_sigma_e_squared)
-    print(anova.ml_sigma_g_squared)
-    print(sqrt(anova.ml_standard_error_mean))
-    print(anova.ml_standard_error_sigma_g)
-    print(anova.ml_standard_error_sigma_e)
-    print(anova.m)
+    # only when we have balanced data (FOR NOW)
+    if (anova.is_balanced): 
+        ML_table = anova.get_ml_table()
+        REML_table = anova.get_reml_table()
+        comparison_table = anova.get_comparison_table()
+
+        print("ML table:")
+        print(ML_table)
+        print("\n")
+        print("REML table:")
+        print(REML_table)
+        print("\n")
+        print("Comparison of anova, ml and reml estimators:")
+        print(comparison_table)
+        print("\n")
+
+    
+    
+
 
 if __name__ == '__main__': 
     main()

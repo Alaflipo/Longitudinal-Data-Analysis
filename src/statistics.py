@@ -85,6 +85,11 @@ class Anova:
         self.ml_standard_error_mean = 0
         self.ml_standard_error_sigma_g = 0 
         self.ml_standard_error_sigma_e = 0 
+
+        # restricted maximum likelihood estimation (REML)
+        self.reml_mean = 0
+        self.reml_sigma_e_squared = 0
+        self.reml_sigma_g_squared = 0 
     
     def __set_group_data(self, current_group, previous, group_index): 
         self.groups.append(current_group)
@@ -198,6 +203,11 @@ class Anova:
         self.ml_standard_error_sigma_g = self.get_ml_standard_error_sigma_g()
         self.ml_standard_error_sigma_e = self.get_ml_standard_error_sigma_e()
 
+        # restricted maximum likelihood estimation (REML)
+        self.reml_mean = self.get_reml_mean()
+        self.reml_sigma_e_squared = self.get_reml_sigma_e_squared()
+        self.reml_sigma_g_squared = self.get_reml_sigma_g_squared()
+
     #####################################################
     #                   Visualise data                  #
     #####################################################
@@ -280,6 +290,75 @@ class Anova:
         table = [[self.lower_ICC, self.ICC, self.upper_ICC]]
         ICC_table = pd.DataFrame(table, columns=['lower', 'ICC', 'upper'], index=['ICC'])
         return ICC_table
+
+    def get_ml_table(self): 
+
+        table = [
+            [   
+                self.ml_mean, 
+                self.ml_standard_error_mean, 
+
+            ], 
+            [   
+                self.ml_sigma_g_squared, 
+                self.ml_standard_error_sigma_g
+            ],
+            [    
+                self.ml_sigma_e_squared, 
+                self.ml_standard_error_sigma_e
+            ]
+        ]
+
+        ml_table = pd.DataFrame(
+            table, 
+            columns=['estimate', 'standard_error'], 
+            index=['intercept', 'group', 'residual']
+        )
+
+        return ml_table
+    
+    def get_reml_table(self): 
+
+        table = [
+            [ self.reml_mean],
+            [ self.reml_sigma_g_squared],
+            [ self.reml_sigma_e_squared]
+        ]
+
+        reml_table = pd.DataFrame(
+            table, 
+            columns=['estimate'], 
+            index=['intercept', 'group', 'residual']
+        )
+
+        return reml_table
+
+    def get_comparison_table(self): 
+        table = [
+            [
+                self.mean_gls, 
+                self.ml_mean, 
+                self.reml_mean
+            ], 
+            [
+                self.sigma_g_squared, 
+                self.ml_sigma_g_squared, 
+                self.reml_sigma_g_squared
+            ],
+            [
+                self.sigma_e_squared,
+                self.ml_sigma_e_squared, 
+                self.reml_sigma_e_squared
+            ]
+        ]
+
+        comparison_table = pd.DataFrame(
+            table, 
+            columns=['anova', 'ml', 'reml'], 
+            index=['intercept', 'group', 'residual']
+        )
+
+        return comparison_table
     
     def plot_residuals(self): 
         #conditional residuals 
@@ -680,7 +759,7 @@ class Anova:
         return self.n_0 * self.ml_sigma_g_squared + self.ml_sigma_e_squared
 
     def get_ml_standard_error_mean(self): 
-        return self.ml_lambda / (self.m * self.n_0)
+        return math.sqrt(self.ml_lambda / (self.m * self.n_0))
     
     def get_ml_standard_error_sigma_g(self): 
         first_part = (2 * self.ml_sigma_e_squared ** 2) / (self.m * self.n_0 ** 2)
@@ -688,18 +767,24 @@ class Anova:
         return first_part * second_part
     
     def get_ml_standard_error_sigma_e(self): 
-        self.get_ml_ci_mean()
         return (2 * self.ml_sigma_e_squared ** 2) / (self.m * (self.n_0 - 1))
-
-    def get_ml_ci_mean(self): 
-        t_values = scipy.stats.t(df=(self.m - 1)).ppf((self.alpha / 2, 1 - self.alpha / 2))
-        t_score = ((self.ml_mean) / self.ml_standard_error_mean) * math.sqrt(self.n)
-        print(t_score)
-        print(t_values)
-
         
-        
+    #####################################################
+    #  Restricted Maximum Likelihood (REML) estimation  #
+    #####################################################
     
+    def get_reml_mean(self): 
+        return self.overall_mean
+    
+    def get_reml_sigma_g_squared(self): 
+        estimator = (self.mean_squares_between - self.mean_squares_within) / self.n_0
+        return max(0, estimator)
+
+    def get_reml_sigma_e_squared(self): 
+        if (self.ml_sigma_g_squared > 0): 
+            return self.mean_squares_within
+        else: 
+            return (self.between_group_sum_of_squares + self.within_group_sum_of_squares) / (self.m * self.n_0 - 1)
 
     
     
