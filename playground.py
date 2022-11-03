@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd 
 
 from src.oneway_anova import OnewayAnova
+from src.twoway_anova import TwowayAnova
 
 def main(): 
     schooldata = pd.read_csv('data/balanced_data.csv')
@@ -28,7 +29,7 @@ def main():
     print("\n")
 
     # plot conditional and marginal residuals 
-    anova.plot_residuals()
+    # anova.plot_residuals()
 
     # only when we have balanced data (FOR NOW)
     if (anova.is_balanced): 
@@ -45,6 +46,15 @@ def main():
         print("Comparison of anova, ml and reml estimators:")
         print(comparison_table)
         print("\n")
+    
+    
+
+    schooldata = pd.read_csv('data/schooldata.csv')
+
+    anova = TwowayAnova(schooldata)
+    anova.set_groups('IQV', 'COMBI', 'CLASS') # grouping variable, target variable
+
+    print(anova.overall_mean)
 
 
 if __name__ == '__main__': 
